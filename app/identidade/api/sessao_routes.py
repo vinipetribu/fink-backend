@@ -1,10 +1,11 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.api.deps import get_current_user, get_sessao_service
+from app.core.security_logging import log_security_event
 from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.identidade.services.sessao_service import SessaoService
 from .sessao_schema import LoginRequest, SessaoCriadaResponse, SessaoResponse
@@ -13,7 +14,11 @@ router = APIRouter(tags=["sessoes"])
 security = HTTPBearer(auto_error=False)  # faz o Swagger exibir o cadeado "Authorize"
 
 @router.post("/login", response_model=SessaoCriadaResponse, status_code=status.HTTP_201_CREATED)
-async def login(payload: LoginRequest, service: SessaoService = Depends(get_sessao_service)) -> SessaoCriadaResponse:
+async def login(
+    request: Request,
+    payload: LoginRequest,
+    service: SessaoService = Depends(get_sessao_service),
+) -> SessaoCriadaResponse:
     """Autentica, cria sessão e retorna o token em claro uma única vez."""
     try:
         sessao, token = await service.criar_por_email_senha(payload.email, payload.senha)
@@ -24,10 +29,19 @@ async def login(payload: LoginRequest, service: SessaoService = Depends(get_sess
             "criada_em": sessao.criada_em,
             "expira_em": sessao.expira_em,
         }
-        return SessaoCriadaResponse.model_validate(data)
+        response = SessaoCriadaResponse.model_validate(data)
+        log_security_event(
+            "LOGIN_SUCCESS",
+            "SUCCESS",
+            request,
+            user_id=sessao.fk_pessoa_id_pessoa,
+        )
+        return response
     except ValueError as e:
+        log_security_event("LOGIN_FAILURE", "FAILURE", request)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
+        log_security_event("LOGIN_FAILURE", "FAILURE", request)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

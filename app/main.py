@@ -4,11 +4,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import api_router
+from app.core.security_logging import log_security_event
 from app.core.settings import settings
 from app.shared.database import init_db
 from app.shared.seed import seed_db
@@ -37,25 +38,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.environment != "production":
         await seed_db()
 
-    # Sanity check das variáveis de ambiente da Pluggy
-    print(f"[PLUGGY] base_url = {settings.pluggy_base_url}")
-    print(f"[PLUGGY] client_id set? {bool(settings.pluggy_client_id)}")
-    print(f"[PLUGGY] client_secret set? {bool(settings.pluggy_client_secret)}")
-
     # Inicializa o client
     app.state.pluggy_client = PluggyClient(
         base_url=settings.pluggy_base_url,
         client_id=settings.pluggy_client_id,
         client_secret=settings.pluggy_client_secret,
     )
-
-    # Validação rápida (opcional, mas ajuda a pegar erro cedo)
-    try:
-        _ = await app.state.pluggy_client.auth_token()
-        print("[PLUGGY] auth_token OK")
-    except Exception as e:
-        # Não derruba a app, mas deixa claro o motivo se /connect-token falhar depois
-        print(f"[PLUGGY] auth_token FAILED: {e}")
 
     try:
         yield
@@ -82,6 +70,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_access_denied(request: Request, call_next):
+    """Emit one minimal event for denied non-login requests."""
+    response = await call_next(request)
+    if response.status_code in {401, 403} and request.url.path != "/api/v1/sessoes/login":
+        log_security_event(
+            "ACCESS_DENIED",
+            "DENIED",
+            request,
+            user_id=getattr(request.state, "security_user_id", None),
+        )
+    return response
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(pessoas_router, prefix="/api/v1/pessoas")

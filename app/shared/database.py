@@ -24,7 +24,7 @@ class Base(DeclarativeBase):
 # ════════════════════════════════════════════
 engine = create_async_engine(
     str(settings.database_url),
-    echo=settings.debug,
+    echo=False,
     future=True,
     pool_pre_ping=True,
 )
