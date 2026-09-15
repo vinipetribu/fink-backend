@@ -9,6 +9,7 @@ from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import api_router
+from app.api.csv_upload_routes import router as csv_upload_router
 from app.core.security_logging import log_security_event
 from app.core.settings import settings
 from app.shared.database import init_db
@@ -95,6 +96,7 @@ app.include_router(assinaturas_router, prefix="/api/v1/assinaturas")
 app.include_router(tipos_pagamento_router, prefix="/api/v1/tipos-pagamento")
 app.include_router(solicitacoes_pagamento_router, prefix="/api/v1/solicitacoes-pagamento")
 app.include_router(pluggy_router)
+app.include_router(csv_upload_router)
 
 
 
