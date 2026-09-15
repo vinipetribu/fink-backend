@@ -26,7 +26,7 @@ async def create_pessoa(
     try:
         pessoa_dict = pessoa.model_dump()
         created = await service.criar(pessoa_dict)
-        return PessoaResponse.model_validate(created.__dict__)
+        return PessoaResponse.model_validate(service.to_dict(created))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -38,7 +38,7 @@ async def list_pessoas(
     """Lista todas as pessoas (uso administrativo)."""
     try:
         pessoas = await service.listar()
-        return [PessoaResponse.model_validate(p.__dict__) for p in pessoas]
+        return [PessoaResponse.model_validate(service.to_dict(p)) for p in pessoas]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -62,7 +62,7 @@ async def get_pessoa(
 
     try:
         pessoa = await service.buscar_por_id(id_pessoa)
-        return PessoaResponse.model_validate(pessoa.__dict__)
+        return PessoaResponse.model_validate(service.to_dict(pessoa))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -75,7 +75,7 @@ async def get_pessoa_by_email(
     """Busca uma pessoa por email."""
     try:
         pessoa = await service.buscar_por_email(email)
-        return PessoaResponse.model_validate(pessoa.__dict__)
+        return PessoaResponse.model_validate(service.to_dict(pessoa))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -100,7 +100,7 @@ async def update_pessoa(
 
     try:
         updated = await service.atualizar(id_pessoa, pessoa.model_dump(exclude_unset=True))
-        return PessoaResponse.model_validate(updated.__dict__)
+        return PessoaResponse.model_validate(service.to_dict(updated))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

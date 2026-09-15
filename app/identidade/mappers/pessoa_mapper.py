@@ -11,7 +11,7 @@ def orm_to_model(orm: PessoaORM) -> Pessoa:
     return Pessoa(
         id_pessoa=orm.id_pessoa,
         email=orm.email,
-        senha=orm.senha,
+        senha_hash=orm.senha_hash,
         nome=orm.nome,
         data_nascimento=orm.data_nascimento,
         telefone=orm.telefone,
@@ -30,7 +30,7 @@ def model_to_orm_new(model: Pessoa) -> PessoaORM:
     """Converte Pessoa (domain) para novo PessoaORM (persistence)."""
     return PessoaORM(
         email=model.email,
-        senha=model.senha,
+        senha_hash=model.senha_hash,
         nome=model.nome,
         data_nascimento=model.data_nascimento,
         telefone=model.telefone,

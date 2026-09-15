@@ -17,6 +17,7 @@ from app.comercial.persistence.plano_orm import PlanoORM
 from app.comercial.persistence.assinatura_orm import AssinaturaORM
 from app.comercial.persistence.tipo_pagamento_orm import TipoPagamentoORM
 from app.comercial.persistence.solicitacao_pagamento_orm import SolicitacaoPagamentoORM
+from app.core.passwords import hash_password
 
 
 DEMO_EMAIL = "demo@fink.dev"
@@ -137,7 +138,7 @@ async def seed_pessoa_demo(session: AsyncSession) -> PessoaORM:
     """
     pessoa = PessoaORM(
         email=DEMO_EMAIL,
-        senha="demo123",  # em produção deveria ser hash!
+        senha_hash=hash_password("demo123"),
         nome="Usuário Demo",
         data_nascimento=date(2000, 1, 1),
         telefone="81999999999",
@@ -298,5 +299,4 @@ async def seed_solicitacao_pagamento_demo(
     session.add(solicitacao)
     await session.commit()
     print("[SEED] Solicitação de pagamento demo criada")
-
 

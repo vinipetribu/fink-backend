@@ -11,6 +11,7 @@ from app.identidade.mappers.sessao_mapper import orm_to_model, model_to_orm_new
 from app.identidade.persistence.sessao_orm import SessaoORM
 from app.identidade.repositories.sessao_repository import SessaoRepository
 from app.identidade.repositories.pessoa_repository import PessoaRepository
+from app.core.passwords import verify_password
 
 
 def _sha256(value: str) -> str:
@@ -27,7 +28,7 @@ class SessaoService:
     async def criar_por_email_senha(self, email: str, senha: str, *, dias_validez: int = 1) -> tuple[SessaoDomain, str]:
         """Autentica por email/senha, cria sessão e retorna (SessaoDomain, token_claro)."""
         pessoa = await self.pessoa_repo.get_by_email(email)
-        if not pessoa or pessoa.senha != senha:
+        if not pessoa or not verify_password(pessoa.senha_hash, senha):
             raise ValueError("Credenciais inválidas")
 
         token_claro = secrets.token_urlsafe(48)

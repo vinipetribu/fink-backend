@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from uuid import UUID
 class Pessoa:
     id_pessoa: UUID | None
     email: str
-    senha: str
+    senha_hash: str = field(repr=False)
     nome: str
     data_nascimento: date
     telefone: str
@@ -25,7 +25,7 @@ class Pessoa:
     def __post_init__(self) -> None:
         for field_name, value in [
             ("email", self.email),
-            ("senha", self.senha),
+            ("senha_hash", self.senha_hash),
             ("nome", self.nome),
             ("telefone", self.telefone),
             ("genero", self.genero),

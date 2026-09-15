@@ -3,6 +3,7 @@ from typing import Sequence, Any
 from uuid import UUID
 
 from app.identidade.domain.pessoa import Pessoa
+from app.core.passwords import hash_password
 from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.identidade.repositories.pessoa_repository import PessoaRepository
 from app.identidade.mappers.pessoa_mapper import orm_to_model, model_to_orm_new
@@ -20,9 +21,19 @@ class PessoaService:
             # Remove campos que não devem ser fornecidos no create
             pessoa_data.pop("id_pessoa", None)
             pessoa_data.pop("data_criacao", None)
+            pessoa_data.pop("admin", None)
+            pessoa_data.pop("senha_hash", None)
+
+            senha = pessoa_data.pop("senha")
 
             # Create domain model with defaults
-            pessoa = Pessoa(id_pessoa=None, data_criacao=date.today(), admin=False, **pessoa_data)
+            pessoa = Pessoa(
+                id_pessoa=None,
+                data_criacao=date.today(),
+                admin=False,
+                senha_hash=hash_password(senha),
+                **pessoa_data,
+            )
 
             # Verificar se já existe pessoa com este email
             existing = await self.repo.get_by_email(pessoa.email)
@@ -72,6 +83,8 @@ class PessoaService:
                 "nome",
                 "data_nascimento",
                 "genero",
+                "admin",
+                "senha_hash",
             }
             campos_invalidos = campos_protegidos.intersection(pessoa_data.keys())
             if campos_invalidos:
@@ -80,7 +93,10 @@ class PessoaService:
             # Atualiza apenas os campos fornecidos
             for key, value in pessoa_data.items():
                 if value is not None:
-                    setattr(pessoa_atual, key, value)
+                    if key == "senha":
+                        pessoa_atual.senha_hash = hash_password(value)
+                    else:
+                        setattr(pessoa_atual, key, value)
 
             # Atualiza no banco
             updated_orm = await self.repo.update(pessoa_atual)
@@ -96,8 +112,8 @@ class PessoaService:
         await self.repo.delete(id_pessoa)
 
     @staticmethod
-    def to_dict(p: PessoaORM) -> dict[str, Any]:
-        """Converte PessoaORM para dicionário."""
+    def to_dict(p: Pessoa | PessoaORM) -> dict[str, Any]:
+        """Converte uma pessoa para um dicionário seguro para respostas da API."""
         return {
             "id_pessoa": p.id_pessoa,
             "email": p.email,

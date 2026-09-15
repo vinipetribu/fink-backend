@@ -20,6 +20,8 @@ class PessoaBase(BaseModel):
 class PessoaCreate(PessoaBase):
     senha: str
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PessoaUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -30,6 +32,8 @@ class PessoaUpdate(BaseModel):
     numero: Optional[str] = None
     cep: Optional[str] = None
     senha: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PessoaResponse(PessoaBase):

@@ -17,7 +17,7 @@ class PessoaORM(Base):
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    senha: Mapped[str] = mapped_column(String, nullable=False)
+    senha_hash: Mapped[str] = mapped_column(String, nullable=False)
     nome: Mapped[str] = mapped_column(String, nullable=False)
     data_nascimento: Mapped[date] = mapped_column(Date, nullable=False)
     telefone: Mapped[str] = mapped_column(String, nullable=False)
