@@ -7,6 +7,9 @@ from typing import Literal
 from uuid import UUID
 
 import pytest
+from fastapi.dependencies.models import Dependant
+from fastapi.routing import APIRoute
+from fastapi.security import HTTPBearer
 from fastapi.testclient import TestClient
 
 from app.api import deps as api_deps
@@ -25,6 +28,30 @@ LOCAL_TOKENS = {
     "local-user-token": USER_ID,
     "local-admin-token": ADMIN_ID,
 }
+PUBLIC_ENDPOINTS = frozenset(
+    {
+        ("GET", "/"),
+        ("GET", "/health"),
+        ("GET", "/api/v1/health"),
+        ("GET", "/api/v1/info"),
+        ("POST", "/api/v1/pessoas/"),
+        ("POST", "/api/v1/sessoes/login"),
+        ("GET", "/api/v1/planos/"),
+        ("GET", "/api/v1/planos/{id_plano}"),
+    }
+)
+CATALOG_ADMIN_ENDPOINTS = frozenset(
+    {
+        ("POST", "/api/v1/planos/"),
+        ("PATCH", "/api/v1/planos/{id_plano}"),
+        ("DELETE", "/api/v1/planos/{id_plano}"),
+        ("PUT", "/api/v1/planos/{id_plano}/ativar"),
+        ("PUT", "/api/v1/planos/{id_plano}/desativar"),
+        ("POST", "/api/v1/tipos-pagamento/"),
+        ("PATCH", "/api/v1/tipos-pagamento/{id_pagamento}"),
+        ("DELETE", "/api/v1/tipos-pagamento/{id_pagamento}"),
+    }
+)
 
 
 @dataclass
@@ -91,6 +118,10 @@ class FakePessoaService:
 class FakeSessaoService:
     """Authenticates two local fake tokens and never contacts external services."""
 
+    def __init__(self, pessoas: dict[UUID, FakePessoa]) -> None:
+        self.pessoas = pessoas
+        self.pessoa_repo = self
+
     @staticmethod
     def _sessao(id_pessoa: UUID) -> Sessao:
         today = date(2026, 1, 1)
@@ -120,6 +151,10 @@ class FakeSessaoService:
             raise ValueError("Token inválido ou expirado") from exc
         return self._sessao(id_pessoa)
 
+    async def get_by_id(self, id_pessoa: UUID) -> FakePessoa | None:
+        """Support get_current_user with the in-memory person collection."""
+        return self.pessoas.get(id_pessoa)
+
 
 def _headers(actor: Actor) -> dict[str, str]:
     if actor == "USER":
@@ -129,12 +164,45 @@ def _headers(actor: Actor) -> dict[str, str]:
     return {}
 
 
+def _dependency_calls(dependant: Dependant) -> list[object]:
+    calls: list[object] = []
+    for dependency in dependant.dependencies:
+        calls.append(dependency.call)
+        calls.extend(_dependency_calls(dependency))
+    return calls
+
+
+def _route(method: str, path: str) -> APIRoute:
+    matches = [
+        route
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        and route.path == path
+        and method in route.methods
+    ]
+    assert len(matches) == 1, f"Expected one route for {method} {path}"
+    return matches[0]
+
+
+def _has_authentication_guard(route: APIRoute) -> bool:
+    return any(
+        call
+        in {
+            api_deps.get_current_user,
+            api_deps.get_current_user_id,
+            api_deps.require_admin,
+        }
+        or isinstance(call, HTTPBearer)
+        for call in _dependency_calls(route.dependant)
+    )
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     """Build a client whose auth and person services are entirely in memory."""
     previous_overrides = app.dependency_overrides.copy()
-    auth_service = FakeSessaoService()
     pessoa_service = FakePessoaService()
+    auth_service = FakeSessaoService(pessoa_service.pessoas)
 
     app.dependency_overrides[api_deps.get_sessao_service] = lambda: auth_service
     app.dependency_overrides[sessao_routes.get_sessao_service] = lambda: auth_service
@@ -144,6 +212,25 @@ def client() -> Iterator[TestClient]:
         yield TestClient(app)
     finally:
         app.dependency_overrides = previous_overrides
+
+
+def test_only_documented_public_endpoints_lack_authentication() -> None:
+    """Keep the complete public allowlist small without calling any handler."""
+    actual_public = {
+        (method, route.path)
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+        if not _has_authentication_guard(route)
+    }
+    assert actual_public == PUBLIC_ENDPOINTS
+
+
+def test_catalog_mutations_use_the_central_admin_guard() -> None:
+    """All plan and payment-type mutations must require ADMIN."""
+    for method, path in CATALOG_ADMIN_ENDPOINTS:
+        calls = _dependency_calls(_route(method, path).dependant)
+        assert api_deps.require_admin in calls
 
 
 @pytest.mark.parametrize("actor", ["ANONYMOUS", "USER", "ADMIN"])
@@ -189,14 +276,7 @@ def test_own_profile_matches_secureai_matrix(
     [
         ("ANONYMOUS", 401),
         ("USER", 403),
-        pytest.param(
-            "ADMIN",
-            200,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="SB-03: the owner check has no ADMIN bypass",
-            ),
-        ),
+        ("ADMIN", 200),
     ],
 )
 def test_other_users_profile_matches_secureai_matrix(
@@ -216,22 +296,8 @@ def test_other_users_profile_matches_secureai_matrix(
 @pytest.mark.parametrize(
     ("actor", "expected_status"),
     [
-        pytest.param(
-            "ANONYMOUS",
-            401,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="SB-02: the administrative list has no authentication guard",
-            ),
-        ),
-        pytest.param(
-            "USER",
-            403,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="SB-03: the administrative list has no role guard",
-            ),
-        ),
+        ("ANONYMOUS", 401),
+        ("USER", 403),
         ("ADMIN", 200),
     ],
 )

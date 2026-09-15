@@ -2,6 +2,8 @@ from typing import List, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_admin
+from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.shared.database import async_session_maker
 from ..repositories.plano_repository_impl import PlanoRepositoryImpl
 from ..services.plano_service import PlanoService
@@ -32,7 +34,11 @@ async def get_plano_service(session: AsyncSession = Depends(get_db)) -> PlanoSer
 # -------------------------------------------------------------------------
 
 @router.post("/", response_model=PlanoResponse, status_code=status.HTTP_201_CREATED)
-async def criar_plano(plano: PlanoCreate, service: PlanoService = Depends(get_plano_service)) -> PlanoResponse:
+async def criar_plano(
+    plano: PlanoCreate,
+    service: PlanoService = Depends(get_plano_service),
+    _: PessoaORM = Depends(require_admin),
+) -> PlanoResponse:
     """Cria um novo plano"""
     try:
         plano_dict = plano.model_dump()
@@ -67,6 +73,7 @@ async def atualizar_plano(
     id_plano: int,
     plano: PlanoUpdate,
     service: PlanoService = Depends(get_plano_service),
+    _: PessoaORM = Depends(require_admin),
 ) -> PlanoResponse:
     """Atualiza parcialmente um plano"""
     try:
@@ -77,7 +84,11 @@ async def atualizar_plano(
 
 
 @router.delete("/{id_plano}")
-async def remover_plano(id_plano: int, service: PlanoService = Depends(get_plano_service)):
+async def remover_plano(
+    id_plano: int,
+    service: PlanoService = Depends(get_plano_service),
+    _: PessoaORM = Depends(require_admin),
+):
     """Remove um plano existente"""
     try:
         await service.remover(id_plano)
@@ -87,7 +98,11 @@ async def remover_plano(id_plano: int, service: PlanoService = Depends(get_plano
 
 
 @router.put("/{id_plano}/ativar", response_model=PlanoResponse)
-async def ativar_plano(id_plano: int, service: PlanoService = Depends(get_plano_service)) -> PlanoResponse:
+async def ativar_plano(
+    id_plano: int,
+    service: PlanoService = Depends(get_plano_service),
+    _: PessoaORM = Depends(require_admin),
+) -> PlanoResponse:
     """Ativa um plano existente"""
     try:
         plano = await service.ativar(id_plano)
@@ -97,7 +112,11 @@ async def ativar_plano(id_plano: int, service: PlanoService = Depends(get_plano_
 
 
 @router.put("/{id_plano}/desativar", response_model=PlanoResponse)
-async def desativar_plano(id_plano: int, service: PlanoService = Depends(get_plano_service)) -> PlanoResponse:
+async def desativar_plano(
+    id_plano: int,
+    service: PlanoService = Depends(get_plano_service),
+    _: PessoaORM = Depends(require_admin),
+) -> PlanoResponse:
     """Desativa um plano existente"""
     try:
         plano = await service.desativar(id_plano)

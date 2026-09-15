@@ -1,33 +1,16 @@
-from typing import List, AsyncGenerator
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared.database import async_session_maker
+from app.api.deps import get_current_user, get_sessao_service
+from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.identidade.services.sessao_service import SessaoService
-from app.identidade.repositories.sessao_repository_impl import SessaoRepositoryImpl
-from app.identidade.repositories.pessoa_repository_impl import PessoaRepositoryImpl
 from .sessao_schema import LoginRequest, SessaoCriadaResponse, SessaoResponse
 
 router = APIRouter(tags=["sessoes"])
 security = HTTPBearer(auto_error=False)  # faz o Swagger exibir o cadeado "Authorize"
-
-
-# DB session
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_maker() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
-
-
-# Service DI
-async def get_sessao_service(session: AsyncSession = Depends(get_db)) -> SessaoService:
-    return SessaoService(SessaoRepositoryImpl(session), PessoaRepositoryImpl(session))
-
 
 @router.post("/login", response_model=SessaoCriadaResponse, status_code=status.HTTP_201_CREATED)
 async def login(payload: LoginRequest, service: SessaoService = Depends(get_sessao_service)) -> SessaoCriadaResponse:
@@ -76,6 +59,8 @@ async def logout(
         token = credentials.credentials
         await service.encerrar_por_token(token)
         return
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -83,9 +68,15 @@ async def logout(
 @router.get("/pessoa/{id_pessoa}", response_model=List[SessaoResponse])
 async def listar_por_pessoa(
     id_pessoa: UUID = Path(..., description="ID único da pessoa (UUID)", example="550e8400-e29b-41d4-a716-446655440000"),
-    service: SessaoService = Depends(get_sessao_service)
+    service: SessaoService = Depends(get_sessao_service),
+    current_user: PessoaORM = Depends(get_current_user),
 ) -> List[SessaoResponse]:
     """Lista sessões da pessoa."""
+    if id_pessoa != current_user.id_pessoa and not current_user.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar estas sessões",
+        )
     try:
         itens = await service.listar_por_pessoa(id_pessoa)
         return [SessaoResponse.model_validate(i.__dict__) for i in itens]
@@ -96,9 +87,15 @@ async def listar_por_pessoa(
 @router.delete("/pessoa/{id_pessoa}/todas", status_code=status.HTTP_200_OK)
 async def encerrar_todas(
     id_pessoa: UUID = Path(..., description="ID único da pessoa (UUID)", example="550e8400-e29b-41d4-a716-446655440000"),
-    service: SessaoService = Depends(get_sessao_service)
+    service: SessaoService = Depends(get_sessao_service),
+    current_user: PessoaORM = Depends(get_current_user),
 ):
     """Remove todas as sessões da pessoa."""
+    if id_pessoa != current_user.id_pessoa and not current_user.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para encerrar estas sessões",
+        )
     try:
         count = await service.encerrar_todas_de_pessoa(id_pessoa)
         return {"removidas": count}

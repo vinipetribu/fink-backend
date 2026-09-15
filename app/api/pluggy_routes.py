@@ -3,6 +3,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.api.deps import get_current_user, require_admin
+from app.identidade.persistence.pessoa_orm import PessoaORM
+
 router = APIRouter(prefix="/api/v1/pluggy", tags=["pluggy"])
 
 
@@ -14,7 +17,10 @@ def get_pluggy(request: Request):
 
 
 @router.get("/connect-token")
-async def get_connect_token(client=Depends(get_pluggy)) -> dict[str, str]:
+async def get_connect_token(
+    client=Depends(get_pluggy),
+    _: PessoaORM = Depends(get_current_user),
+) -> dict[str, str]:
     try:
         token = await client.create_connect_token()
         return {"connectToken": token}
@@ -23,7 +29,11 @@ async def get_connect_token(client=Depends(get_pluggy)) -> dict[str, str]:
 
 
 @router.get("/accounts/{item_id}")
-async def accounts(item_id: str, client=Depends(get_pluggy)) -> list[dict[str, Any]]:
+async def accounts(
+    item_id: str,
+    client=Depends(get_pluggy),
+    _: PessoaORM = Depends(get_current_user),
+) -> list[dict[str, Any]]:
     """
     Lista as contas de um item específico (instituição conectada).
     """
@@ -36,6 +46,7 @@ async def transactions(
     from_date: str | None = None,
     to_date: str | None = None,
     client=Depends(get_pluggy),
+    _: PessoaORM = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """
     Lista transações de uma conta.
@@ -48,6 +59,7 @@ async def transactions(
 async def account_balance(
     account_id: str,
     client=Depends(get_pluggy),
+    _: PessoaORM = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Retorna o saldo atual de uma conta específica.
@@ -71,6 +83,7 @@ async def account_summary(
     from_date: str | None = None,
     to_date: str | None = None,
     client=Depends(get_pluggy),
+    _: PessoaORM = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Retorna um resumo da conta:
@@ -113,7 +126,10 @@ async def account_summary(
 
 
 @router.get("/_debug-auth")
-async def debug_auth(client=Depends(get_pluggy)) -> dict[str, Any]:
+async def debug_auth(
+    client=Depends(get_pluggy),
+    _: PessoaORM = Depends(require_admin),
+) -> dict[str, Any]:
     """
     Endpoint de debug para ver o comportamento de /auth e /auth/token na Pluggy.
     """

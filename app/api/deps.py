@@ -6,10 +6,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared.database import async_session_maker
-from app.identidade.services.sessao_service import SessaoService
-from app.identidade.repositories.sessao_repository_impl import SessaoRepositoryImpl
+from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.identidade.repositories.pessoa_repository_impl import PessoaRepositoryImpl
+from app.identidade.repositories.sessao_repository_impl import SessaoRepositoryImpl
+from app.identidade.services.sessao_service import SessaoService
+from app.shared.database import async_session_maker
 
 
 security = HTTPBearer(auto_error=False)
@@ -29,29 +30,42 @@ async def get_sessao_service(session: AsyncSession = Depends(get_db)) -> SessaoS
     return SessaoService(SessaoRepositoryImpl(session), PessoaRepositoryImpl(session))
 
 
-async def get_current_user_id(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     sessao_service: SessaoService = Depends(get_sessao_service),
-) -> UUID:
-    """
-    Valida o token Bearer e retorna o ID do usuário autenticado.
-    
-    Raises:
-        HTTPException: 401 se o token for inválido ou ausente
-    """
+) -> PessoaORM:
+    """Validate the Bearer session and return its current local user."""
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Bearer token ausente ou inválido",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         sessao = await sessao_service.validar(credentials.credentials)
-        return sessao.fk_pessoa_id_pessoa
+        pessoa = await sessao_service.pessoa_repo.get_by_id(sessao.fk_pessoa_id_pessoa)
+        if not pessoa:
+            raise ValueError("Usuário da sessão não encontrado")
+        return pessoa
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_current_user_id(current_user: PessoaORM = Depends(get_current_user)) -> UUID:
+    """Return the authenticated user's identifier for ownership checks."""
+    return current_user.id_pessoa
+
+
+async def require_admin(current_user: PessoaORM = Depends(get_current_user)) -> PessoaORM:
+    """Require the authenticated user to have the existing admin flag."""
+    if not current_user.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso exclusivo para administradores",
+        )
+    return current_user

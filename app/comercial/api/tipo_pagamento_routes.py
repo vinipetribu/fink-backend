@@ -4,9 +4,11 @@ from typing import List, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared.database import async_session_maker
-from app.comercial.services.tipo_pagamento_service import TipoPagamentoService
+from app.api.deps import get_current_user, require_admin
 from app.comercial.repositories.tipo_pagamento_repository_impl import TipoPagamentoRepositoryImpl
+from app.comercial.services.tipo_pagamento_service import TipoPagamentoService
+from app.identidade.persistence.pessoa_orm import PessoaORM
+from app.shared.database import async_session_maker
 from .tipo_pagamento_schema import (
     TipoPagamentoCreate,
     TipoPagamentoResponse,
@@ -32,7 +34,9 @@ async def get_service(session: AsyncSession = Depends(get_db)) -> TipoPagamentoS
 
 @router.post("/", response_model=TipoPagamentoResponse, status_code=status.HTTP_201_CREATED)
 async def create_tipo_pagamento(
-    payload: TipoPagamentoCreate, service: TipoPagamentoService = Depends(get_service)
+    payload: TipoPagamentoCreate,
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(require_admin),
 ) -> TipoPagamentoResponse:
     try:
         created = await service.criar(payload.model_dump())
@@ -42,7 +46,10 @@ async def create_tipo_pagamento(
 
 
 @router.get("/", response_model=List[TipoPagamentoResponse])
-async def list_tipos(service: TipoPagamentoService = Depends(get_service)) -> List[TipoPagamentoResponse]:
+async def list_tipos(
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(get_current_user),
+) -> List[TipoPagamentoResponse]:
     try:
         itens = await service.listar()
         return [TipoPagamentoResponse.model_validate(i.__dict__) for i in itens]
@@ -51,7 +58,11 @@ async def list_tipos(service: TipoPagamentoService = Depends(get_service)) -> Li
 
 
 @router.get("/{id_pagamento}", response_model=TipoPagamentoResponse)
-async def get_by_id(id_pagamento: int, service: TipoPagamentoService = Depends(get_service)) -> TipoPagamentoResponse:
+async def get_by_id(
+    id_pagamento: int,
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(get_current_user),
+) -> TipoPagamentoResponse:
     try:
         item = await service.buscar_por_id(id_pagamento)
         return TipoPagamentoResponse.model_validate(item.__dict__)
@@ -60,7 +71,11 @@ async def get_by_id(id_pagamento: int, service: TipoPagamentoService = Depends(g
 
 
 @router.get("/by-tipo/{tipo}", response_model=TipoPagamentoResponse)
-async def get_by_tipo(tipo: str, service: TipoPagamentoService = Depends(get_service)) -> TipoPagamentoResponse:
+async def get_by_tipo(
+    tipo: str,
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(get_current_user),
+) -> TipoPagamentoResponse:
     try:
         item = await service.buscar_por_tipo(tipo)
         return TipoPagamentoResponse.model_validate(item.__dict__)
@@ -70,7 +85,10 @@ async def get_by_tipo(tipo: str, service: TipoPagamentoService = Depends(get_ser
 
 @router.patch("/{id_pagamento}", response_model=TipoPagamentoResponse)
 async def update_tipo(
-    id_pagamento: int, payload: TipoPagamentoUpdate, service: TipoPagamentoService = Depends(get_service)
+    id_pagamento: int,
+    payload: TipoPagamentoUpdate,
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(require_admin),
 ) -> TipoPagamentoResponse:
     try:
         updated = await service.atualizar(id_pagamento, payload.model_dump(exclude_unset=True))
@@ -80,7 +98,11 @@ async def update_tipo(
 
 
 @router.delete("/{id_pagamento}")
-async def delete_tipo(id_pagamento: int, service: TipoPagamentoService = Depends(get_service)):
+async def delete_tipo(
+    id_pagamento: int,
+    service: TipoPagamentoService = Depends(get_service),
+    _: PessoaORM = Depends(require_admin),
+):
     try:
         await service.remover(id_pagamento)
         return {"message": "Tipo de pagamento removido com sucesso"}

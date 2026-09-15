@@ -4,7 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, get_current_user_id
+from app.api.deps import get_current_user, get_db, require_admin
+from app.identidade.persistence.pessoa_orm import PessoaORM
 from ..services.pessoa_service import PessoaService
 from ..repositories.pessoa_repository_impl import PessoaRepositoryImpl
 from .pessoa_schema import PessoaCreate, PessoaResponse, PessoaUpdate
@@ -34,6 +35,7 @@ async def create_pessoa(
 @router.get("/", response_model=List[PessoaResponse])
 async def list_pessoas(
     service: PessoaService = Depends(get_pessoa_service),
+    _: PessoaORM = Depends(require_admin),
 ) -> List[PessoaResponse]:
     """Lista todas as pessoas (uso administrativo)."""
     try:
@@ -43,18 +45,32 @@ async def list_pessoas(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get("/by-email/{email}", response_model=PessoaResponse)
+async def get_pessoa_by_email(
+    email: str,
+    service: PessoaService = Depends(get_pessoa_service),
+    _: PessoaORM = Depends(require_admin),
+) -> PessoaResponse:
+    """Busca uma pessoa por email."""
+    try:
+        pessoa = await service.buscar_por_email(email)
+        return PessoaResponse.model_validate(service.to_dict(pessoa))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.get("/{id_pessoa}", response_model=PessoaResponse)
 async def get_pessoa(
     id_pessoa: UUID = Path(..., description="ID único da pessoa (UUID)", example="550e8400-e29b-41d4-a716-446655440000"),
     service: PessoaService = Depends(get_pessoa_service),
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: PessoaORM = Depends(get_current_user),
 ) -> PessoaResponse:
     """
     Busca uma pessoa por ID.
 
     Só permite acessar os dados se o ID da rota for o mesmo ID do usuário autenticado.
     """
-    if id_pessoa != user_id:
+    if id_pessoa != current_user.id_pessoa and not current_user.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para acessar estes dados",
@@ -67,32 +83,19 @@ async def get_pessoa(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/by-email/{email}", response_model=PessoaResponse)
-async def get_pessoa_by_email(
-    email: str,
-    service: PessoaService = Depends(get_pessoa_service),
-) -> PessoaResponse:
-    """Busca uma pessoa por email."""
-    try:
-        pessoa = await service.buscar_por_email(email)
-        return PessoaResponse.model_validate(service.to_dict(pessoa))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
 @router.patch("/{id_pessoa}", response_model=PessoaResponse)
 async def update_pessoa(
     id_pessoa: UUID = Path(..., description="ID único da pessoa (UUID)", example="550e8400-e29b-41d4-a716-446655440000"),
     pessoa: PessoaUpdate = ...,
     service: PessoaService = Depends(get_pessoa_service),
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: PessoaORM = Depends(get_current_user),
 ) -> PessoaResponse:
     """
     Atualiza parcialmente uma pessoa existente.
 
     Só permite atualizar se o ID da rota for o mesmo ID do usuário autenticado.
     """
-    if id_pessoa != user_id:
+    if id_pessoa != current_user.id_pessoa and not current_user.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para atualizar estes dados",
@@ -109,14 +112,14 @@ async def update_pessoa(
 async def delete_pessoa(
     id_pessoa: UUID = Path(..., description="ID único da pessoa (UUID)", example="550e8400-e29b-41d4-a716-446655440000"),
     service: PessoaService = Depends(get_pessoa_service),
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: PessoaORM = Depends(get_current_user),
 ):
     """
     Remove uma pessoa.
 
     Só permite remover se o ID da rota for o mesmo ID do usuário autenticado.
     """
-    if id_pessoa != user_id:
+    if id_pessoa != current_user.id_pessoa and not current_user.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para remover este cadastro",

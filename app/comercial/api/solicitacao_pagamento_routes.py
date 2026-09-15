@@ -2,13 +2,14 @@ from typing import List, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
+from app.identidade.persistence.pessoa_orm import PessoaORM
 from app.shared.database import async_session_maker
 from ..repositories.solicitacao_pagamento_repository_impl import SolicitacaoPagamentoRepositoryImpl
 from ..services.solicitacao_pagamento_service import SolicitacaoPagamentoService
 from .solicitacao_pagamento_schema import (
     SolicitacaoPagamentoCreate,
     SolicitacaoPagamentoResponse,
-    SolicitacaoPagamentoUpdate,
 )
 
 router = APIRouter(tags=["solicitacoes_pagamento"])
@@ -44,6 +45,7 @@ async def get_solicitacao_pagamento_service(
 async def criar_solicitacao_pagamento(
     solicitacao: SolicitacaoPagamentoCreate,
     service: SolicitacaoPagamentoService = Depends(get_solicitacao_pagamento_service),
+    _: PessoaORM = Depends(get_current_user),
 ) -> SolicitacaoPagamentoResponse:
     """Cria uma nova solicitação de pagamento."""
     try:
@@ -57,6 +59,7 @@ async def criar_solicitacao_pagamento(
 @router.get("/", response_model=List[SolicitacaoPagamentoResponse])
 async def listar_solicitacoes_pagamento(
     service: SolicitacaoPagamentoService = Depends(get_solicitacao_pagamento_service),
+    _: PessoaORM = Depends(get_current_user),
 ) -> List[SolicitacaoPagamentoResponse]:
     """Lista todas as solicitações de pagamento."""
     try:
@@ -70,6 +73,7 @@ async def listar_solicitacoes_pagamento(
 async def buscar_solicitacao_pagamento(
     id_solicitacao: int,
     service: SolicitacaoPagamentoService = Depends(get_solicitacao_pagamento_service),
+    _: PessoaORM = Depends(get_current_user),
 ) -> SolicitacaoPagamentoResponse:
     """Busca uma solicitação de pagamento por ID."""
     try:
@@ -83,6 +87,7 @@ async def buscar_solicitacao_pagamento(
 async def remover_solicitacao_pagamento(
     id_solicitacao: int,
     service: SolicitacaoPagamentoService = Depends(get_solicitacao_pagamento_service),
+    _: PessoaORM = Depends(get_current_user),
 ):
     """Remove uma solicitação de pagamento existente."""
     try:

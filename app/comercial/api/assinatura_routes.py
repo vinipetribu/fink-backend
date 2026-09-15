@@ -67,10 +67,11 @@ async def criar_assinatura(
 @router.get("/", response_model=List[AssinaturaResponse])
 async def listar_assinaturas(
     service: AssinaturaService = Depends(get_assinatura_service),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> List[AssinaturaResponse]:
-    """Lista todas as assinaturas (uso administrativo)."""
+    """Lista as assinaturas do usuário autenticado."""
     try:
-        assinaturas = await service.listar_todas()
+        assinaturas = await service.listar_por_pessoa(user_id)
         return [AssinaturaResponse.model_validate(a.__dict__) for a in assinaturas]
     except Exception as e:
         raise HTTPException(
