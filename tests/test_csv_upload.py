@@ -9,6 +9,11 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+from app.ai.transaction_classifier import (
+    CATEGORIES,
+    TRAINING_DATA_PATH,
+    get_transaction_classifier,
+)
 from app.api import deps as api_deps
 from app.api.csv_upload_routes import MAX_CSV_BYTES
 from app.core.security_logging import logger as security_logger
@@ -83,28 +88,37 @@ def test_valid_upload_returns_metadata_and_preview(
     response = _upload(client, content, filename=EXAMPLE_PATH.name)
 
     assert response.status_code == 200, response.text
-    assert response.json() == {
-        "nome_original": "transacoes_exemplo.csv",
-        "sha256": hashlib.sha256(content).hexdigest(),
-        "quantidade_registros": 3,
-        "previa": [
-            {
-                "data": "2026-01-10",
-                "descricao": "Compra fictícia",
-                "valor": "-42.50",
-            },
-            {
-                "data": "2026-01-15",
-                "descricao": "Receita fictícia",
-                "valor": "150.00",
-            },
-            {
-                "data": "2026-01-20",
-                "descricao": "Assinatura fictícia",
-                "valor": "-19.90",
-            },
-        ],
+    body = response.json()
+    assert body["nome_original"] == "transacoes_exemplo.csv"
+    assert body["sha256"] == hashlib.sha256(content).hexdigest()
+    assert body["quantidade_registros"] == 3
+    assert [row["categoria_sugerida"] for row in body["previa"]] == [
+        "Alimentação",
+        "Transporte",
+        "Educação",
+    ]
+    assert all(0 <= row["confianca"] <= 1 for row in body["previa"])
+    assert all(isinstance(row["revisao_necessaria"], bool) for row in body["previa"])
+    assert body["resumo_categorias"] == {
+        category: int(category in {"Alimentação", "Transporte", "Educação"})
+        for category in CATEGORIES
     }
+
+
+def test_upload_does_not_modify_or_expand_training_data(
+    client: TestClient,
+    authenticate: Callable[[bool], None],
+) -> None:
+    """User CSVs neither alter the versioned data nor replace the fitted model."""
+    authenticate(False)
+    training_before = TRAINING_DATA_PATH.read_bytes()
+    classifier_before = get_transaction_classifier()
+
+    response = _upload(client, EXAMPLE_PATH.read_bytes())
+
+    assert response.status_code == 200
+    assert TRAINING_DATA_PATH.read_bytes() == training_before
+    assert get_transaction_classifier() is classifier_before
 
 
 def test_upload_without_authentication_returns_401(client: TestClient) -> None:

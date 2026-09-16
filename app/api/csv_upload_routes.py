@@ -12,6 +12,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
+from app.ai.transaction_classifier import (
+    CATEGORIES,
+    TransactionCategory,
+    get_transaction_classifier,
+)
 from app.api.deps import get_current_user
 from app.identidade.persistence.pessoa_orm import PessoaORM
 
@@ -30,6 +35,9 @@ class CSVPreviewRow(BaseModel):
     data: date
     descricao: str
     valor: str
+    categoria_sugerida: TransactionCategory
+    confianca: float = Field(ge=0.0, le=1.0)
+    revisao_necessaria: bool
 
 
 class CSVUploadResponse(BaseModel):
@@ -39,6 +47,7 @@ class CSVUploadResponse(BaseModel):
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     quantidade_registros: int = Field(ge=1, le=MAX_CSV_RECORDS)
     previa: list[CSVPreviewRow] = Field(max_length=CSV_PREVIEW_RECORDS)
+    resumo_categorias: dict[TransactionCategory, int]
 
 
 async def _read_limited(arquivo: UploadFile) -> bytes:
@@ -96,7 +105,9 @@ def _parse_value(value: str, line_number: int) -> str:
     return format(amount, "f")
 
 
-def _parse_csv(content: str) -> tuple[int, list[CSVPreviewRow]]:
+def _parse_csv(
+    content: str,
+) -> tuple[int, list[CSVPreviewRow], dict[TransactionCategory, int]]:
     try:
         reader = csv.DictReader(io.StringIO(content, newline=""), strict=True)
         headers = reader.fieldnames
@@ -110,7 +121,11 @@ def _parse_csv(content: str) -> tuple[int, list[CSVPreviewRow]]:
                 detail="O CSV deve conter as colunas data, descricao e valor",
             )
 
+        classifier = get_transaction_classifier()
         preview: list[CSVPreviewRow] = []
+        category_summary: dict[TransactionCategory, int] = {
+            category: 0 for category in CATEGORIES
+        }
         record_count = 0
         for row in reader:
             record_count += 1
@@ -125,13 +140,22 @@ def _parse_csv(content: str) -> tuple[int, list[CSVPreviewRow]]:
                     detail=f"Linha {reader.line_num}: quantidade de campos inválida",
                 )
 
-            parsed = CSVPreviewRow(
-                data=_parse_date(row["data"].strip(), reader.line_num),
-                descricao=_parse_description(row["descricao"], reader.line_num),
-                valor=_parse_value(row["valor"], reader.line_num),
-            )
+            parsed_date = _parse_date(row["data"].strip(), reader.line_num)
+            parsed_description = _parse_description(row["descricao"], reader.line_num)
+            parsed_value = _parse_value(row["valor"], reader.line_num)
+            classification = classifier.classify(parsed_description)
+            category_summary[classification.categoria_sugerida] += 1
             if len(preview) < CSV_PREVIEW_RECORDS:
-                preview.append(parsed)
+                preview.append(
+                    CSVPreviewRow(
+                        data=parsed_date,
+                        descricao=parsed_description,
+                        valor=parsed_value,
+                        categoria_sugerida=classification.categoria_sugerida,
+                        confianca=classification.confianca,
+                        revisao_necessaria=classification.revisao_necessaria,
+                    )
+                )
     except csv.Error as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -143,7 +167,7 @@ def _parse_csv(content: str) -> tuple[int, list[CSVPreviewRow]]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="O CSV deve conter ao menos um registro",
         )
-    return record_count, preview
+    return record_count, preview, category_summary
 
 
 @router.post("/csv", response_model=CSVUploadResponse)
@@ -169,12 +193,13 @@ async def upload_csv(
                 detail="O arquivo deve usar codificação UTF-8",
             ) from exc
 
-        record_count, preview = _parse_csv(text_content)
+        record_count, preview, category_summary = _parse_csv(text_content)
         return CSVUploadResponse(
             nome_original=original_name,
             sha256=hashlib.sha256(raw_content).hexdigest(),
             quantidade_registros=record_count,
             previa=preview,
+            resumo_categorias=category_summary,
         )
     finally:
         await arquivo.close()

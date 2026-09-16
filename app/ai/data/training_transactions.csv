@@ -1,0 +1,71 @@
+descricao,categoria
+almoço no restaurante,Alimentação
+jantar na pizzaria,Alimentação
+compras no supermercado,Alimentação
+café na padaria,Alimentação
+lanche na lanchonete,Alimentação
+refeição no delivery,Alimentação
+compras na feira,Alimentação
+pedido de comida,Alimentação
+mercado do bairro,Alimentação
+restaurante por quilo,Alimentação
+corrida de aplicativo,Transporte
+passagem de ônibus,Transporte
+recarga do cartão transporte,Transporte
+combustível no posto,Transporte
+estacionamento do carro,Transporte
+manutenção do veículo,Transporte
+passagem de metrô,Transporte
+viagem de táxi,Transporte
+pedágio da estrada,Transporte
+bilhete de trem,Transporte
+aluguel do apartamento,Moradia
+conta de energia elétrica,Moradia
+conta de água,Moradia
+condomínio residencial,Moradia
+gás de cozinha,Moradia
+internet residencial,Moradia
+reforma da casa,Moradia
+parcela do financiamento imobiliário,Moradia
+material de limpeza da casa,Moradia
+manutenção do apartamento,Moradia
+consulta médica,Saúde
+compra na farmácia,Saúde
+exame de laboratório,Saúde
+plano de saúde,Saúde
+consulta odontológica,Saúde
+medicamento prescrito,Saúde
+sessão de fisioterapia,Saúde
+vacina na clínica,Saúde
+atendimento no hospital,Saúde
+terapia com psicólogo,Saúde
+mensalidade da escola,Educação
+curso de programação,Educação
+compra de livros didáticos,Educação
+material escolar,Educação
+mensalidade da faculdade,Educação
+aula de idiomas,Educação
+curso preparatório,Educação
+inscrição em treinamento,Educação
+plataforma de estudos,Educação
+taxa de matrícula,Educação
+ingresso do cinema,Lazer
+assinatura de streaming,Lazer
+show de música,Lazer
+passeio no parque,Lazer
+viagem de férias,Lazer
+ingresso do teatro,Lazer
+jogo de videogame,Lazer
+mensalidade da academia,Lazer
+evento esportivo,Lazer
+livro de ficção,Lazer
+transferência entre contas,Outros
+tarifa bancária,Outros
+saque no caixa eletrônico,Outros
+pagamento de imposto,Outros
+doação para instituição,Outros
+presente de aniversário,Outros
+ajuste de saldo,Outros
+serviço não identificado,Outros
+compra diversa,Outros
+pagamento avulso,Outros
