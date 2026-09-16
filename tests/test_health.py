@@ -41,7 +41,4 @@ def test_api_info_endpoint() -> None:
     response = client.get("/api/v1/info")
     assert response.status_code == 200
     data = response.json()
-    assert "name" in data
-    assert "version" in data
-    assert "environment" in data
-    assert "debug" in data
+    assert set(data) == {"name", "version"}

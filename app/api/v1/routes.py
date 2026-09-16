@@ -27,6 +27,4 @@ async def info() -> dict[str, Any]:
     return {
         "name": settings.app_name,
         "version": settings.app_version,
-        "environment": settings.environment,
-        "debug": settings.debug,
     }

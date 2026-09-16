@@ -39,12 +39,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.environment != "production":
         await seed_db()
 
-    # Inicializa o client
-    app.state.pluggy_client = PluggyClient(
-        base_url=settings.pluggy_base_url,
-        client_id=settings.pluggy_client_id,
-        client_secret=settings.pluggy_client_secret,
-    )
+    # Disabled by default: do not instantiate or authenticate an external client.
+    app.state.pluggy_client = None
+    if settings.pluggy_enabled:
+        app.state.pluggy_client = PluggyClient(
+            base_url=settings.pluggy_base_url,
+            client_id=settings.pluggy_client_id,
+            client_secret=settings.pluggy_client_secret,
+        )
 
     try:
         yield

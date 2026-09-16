@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     )
 
     # Pluggy
+    pluggy_enabled: bool = Field(default=False, description="Enable the external Pluggy integration")
     pluggy_base_url: str = Field(default="https://api.pluggy.ai", description="Pluggy API base URL")
     pluggy_client_id: str = Field(default="", description="Pluggy client id")
     pluggy_client_secret: str = Field(default="", description="Pluggy client secret")
