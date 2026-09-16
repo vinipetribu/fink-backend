@@ -1,0 +1,12 @@
+$PROJECT_ROOT representa a pasta local do repositório fink-backend.
+
+$ cd "$PROJECT_ROOT"
+
+$ cp examples/transacoes_exemplo.csv /tmp/transacoes_exemplo_alterado.csv
+
+$ sed -i '' 's/restaurante/restaurante alterado/' /tmp/transacoes_exemplo_alterado.csv
+
+$ shasum -a 256 examples/transacoes_exemplo.csv /tmp/transacoes_exemplo_alterado.csv
+
+f208efea6d1a1cb426af82d4e0cfab683bc33ff4dd2bcd78c286603aa5ae36a0  examples/transacoes_exemplo.csv
+484f6094d03ebf6656a6a2f06244e95d1c21272ceca279edd87a8a1aeac701a6  /tmp/transacoes_exemplo_alterado.csv

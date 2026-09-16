@@ -1,0 +1,16 @@
+$PROJECT_ROOT representa a pasta local do repositório fink-backend.
+
+$ cd "$PROJECT_ROOT"
+
+$ docker compose run --rm api sh -lc 'poetry install --with dev --no-interaction && poetry run pytest'
+
+........................................................................ [ 98%]
+.                                                                        [100%]
+
+=============================== warnings summary ===============================
+11 avisos de depreciação em FastAPI/Pydantic.
+
+================================ tests coverage ================================
+TOTAL                                                            3261   1264    61%
+
+73 passed, 11 warnings in 5.10s

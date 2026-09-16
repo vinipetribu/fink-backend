@@ -1,0 +1,10 @@
+$PROJECT_ROOT representa a pasta local do repositório fink-backend.
+
+$ cd "$PROJECT_ROOT"
+
+$ docker compose logs --since 30m api | grep -E 'LOGIN_SUCCESS|LOGIN_FAILURE|ACCESS_DENIED|ADMIN_ACCESS'
+
+fink_api | {"timestamp":"2026-09-16T18:30:03.977+00:00","event":"LOGIN_SUCCESS","result":"SUCCESS","method":"POST","route":"/api/v1/sessoes/login","user_id":"5fd3d333-43a1-4534-abda-1e5446afc657"}
+fink_api | {"timestamp":"2026-09-16T18:30:33.846+00:00","event":"ACCESS_DENIED","result":"DENIED","method":"GET","route":"/api/v1/pessoas/"}
+fink_api | {"timestamp":"2026-09-16T18:34:43.600+00:00","event":"ADMIN_ACCESS","result":"ALLOWED","method":"GET","route":"/api/v1/pessoas/","user_id":"5fd3d333-43a1-4534-abda-1e5446afc657"}
+fink_api | {"timestamp":"2026-09-16T18:40:54.846+00:00","event":"LOGIN_FAILURE","result":"FAILURE","method":"POST","route":"/api/v1/sessoes/login"}
