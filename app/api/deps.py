@@ -74,10 +74,13 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso exclusivo para administradores",
         )
-    log_security_event(
-        "ADMIN_ACCESS",
-        "ALLOWED",
-        request,
-        user_id=current_user.id_pessoa,
-    )
+    # Reading the buffer must not add an event on every refresh.
+    route = request.scope.get("route")
+    if not (request.method == "GET" and getattr(route, "name", None) == "list_security_logs"):
+        log_security_event(
+            "ADMIN_ACCESS",
+            "ALLOWED",
+            request,
+            user_id=current_user.id_pessoa,
+        )
     return current_user

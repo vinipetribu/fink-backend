@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import api_router
 from app.api.csv_upload_routes import router as csv_upload_router
+from app.api.security_log_routes import router as security_logs_router
 from app.core.security_logging import log_security_event
 from app.core.settings import settings
 from app.shared.database import init_db
@@ -89,6 +90,7 @@ async def log_access_denied(request: Request, call_next):
     return response
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(security_logs_router, prefix="/api/v1/security-logs")
 app.include_router(pessoas_router, prefix="/api/v1/pessoas")
 app.include_router(alertas_router, prefix="/api/v1/alertas")
 app.include_router(metas_router, prefix="/api/v1/metas")
