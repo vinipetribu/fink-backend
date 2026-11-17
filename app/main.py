@@ -13,6 +13,7 @@ from app.api.csv_upload_routes import router as csv_upload_router
 from app.api.security_log_routes import router as security_logs_router
 from app.core.security_logging import log_security_event
 from app.core.settings import settings
+from app.crypto_lab.middleware import CryptoLabMiddleware
 from app.shared.database import init_db
 from app.shared.seed import seed_db
 
@@ -52,6 +53,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        from app.crypto_lab.attacks.runner import coordinator
+        await coordinator.close()
+        from app.crypto_lab.anomaly_lab.runner import coordinator as anomaly_coordinator
+        await anomaly_coordinator.close()
         client = getattr(app.state, "pluggy_client", None)
         if client:
             await client.close()
@@ -101,6 +106,18 @@ app.include_router(tipos_pagamento_router, prefix="/api/v1/tipos-pagamento")
 app.include_router(solicitacoes_pagamento_router, prefix="/api/v1/solicitacoes-pagamento")
 app.include_router(pluggy_router)
 app.include_router(csv_upload_router)
+
+# Never register the lab routes in production. The middleware also enforces
+# the runtime flag and protects validation and error responses for this prefix.
+if settings.environment.strip().lower() != "production":
+    from app.crypto_lab.routes import router as crypto_lab_router
+
+    app.include_router(crypto_lab_router)
+    from app.crypto_lab.attacks.routes import router as attacks_router
+    app.include_router(attacks_router)
+    from app.crypto_lab.anomaly_lab.routes import router as anomaly_router
+    app.include_router(anomaly_router)
+app.add_middleware(CryptoLabMiddleware, settings=settings)
 
 
 

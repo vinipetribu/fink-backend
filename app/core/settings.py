@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0", description="Application version")
     debug: bool = Field(default=False, description="Debug mode")
     environment: str = Field(default="production", description="Environment")
+    crypto_lab_enabled: bool = Field(default=False, description="Enable local-only AES laboratory")
+    crypto_lab_experimental_enabled: bool = Field(default=False, description="Enable insecure teaching cipher")
+    crypto_lab_attacks_enabled: bool = Field(default=False, description="Enable local controlled experiments")
+    crypto_lab_attacks_timeout_seconds: float = Field(default=120, gt=0, le=120)
+    crypto_lab_anomaly_enabled: bool = Field(default=False, description="Enable synthetic anomaly laboratory")
+    crypto_lab_anomaly_timeout_seconds: float = Field(default=120, gt=0, le=120)
+    crypto_lab_workers: int = Field(default=1, description="Declared number of lab workers")
+    crypto_lab_instances: int = Field(default=1, description="Declared number of lab instances")
 
     # Database (keep as plain str to satisfy mypy)
     database_url: str = Field(
