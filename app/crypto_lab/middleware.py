@@ -105,6 +105,15 @@ class CryptoLabMiddleware:
             nonlocal started, replacement, sanitized_sent
             if message["type"] == "http.response.start":
                 started = True
+                event_types = {
+                    PREFIX + '/encrypt': 'AES_ENCRYPT',
+                    PREFIX + '/decrypt': 'AES_DECRYPT',
+                    PREFIX + '/steganography/embed': 'STEGO_EMBED',
+                    PREFIX + '/steganography/extract': 'STEGO_EXTRACT',
+                }
+                if scope['method'] == 'POST' and path in event_types:
+                    from app.crypto_lab.event_store.emitter import emit
+                    emit(event_types[path], path, 'SUCCESS' if message['status'] < 400 else 'FAILURE')
                 headers = MutableHeaders(scope=message)
                 headers["cache-control"] = "no-store"
                 if message["status"] == 422:

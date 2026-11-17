@@ -65,6 +65,8 @@ class Coordinator:
         self.starts.append(now)
         self.user_starts[owner] = now
         self.task = asyncio.create_task(self._execute(job_id, timeout))
+        from app.crypto_lab.event_store.emitter import emit
+        emit('ATTACK_RUN', '/api/v1/crypto-lab/attacks/runs', 'ALLOWED', origin='synthetic')
         return {"run_id": job_id, "status": "running", "algorithm": "TOY-V1-INSECURE"}
 
     def get(self, owner, job_id):
@@ -118,6 +120,9 @@ class Coordinator:
                 await self.process.wait()
             self.process = None
             job["ended"] = time.monotonic()
+            from app.crypto_lab.event_store.emitter import emit
+            emit('ATTACK_RUN', '/api/v1/crypto-lab/attacks/runs',
+                 {'completed': 'SUCCESS', 'timed_out': 'TIMEOUT'}.get(job['status'], 'FAILURE'), origin='synthetic')
             self.active = None
             self.release_slot()
 
@@ -137,6 +142,8 @@ class Coordinator:
             job = self.jobs[self.active]
             job["status"] = "failed"
             job["ended"] = time.monotonic()
+            from app.crypto_lab.event_store.emitter import emit
+            emit('ATTACK_RUN', '/api/v1/crypto-lab/attacks/runs', 'FAILURE', origin='synthetic')
             self.active = None
         self.release_slot()
 

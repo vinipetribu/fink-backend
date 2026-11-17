@@ -663,3 +663,59 @@ Para reproduzir, executar na raiz do backend com Docker e as imagens locais `fin
 ```bash
 python3 scripts/anomaly_http_smoke.py
 ```
+
+## Camada persistente e ingestão sintética controlada
+
+A migração `20261117_secureai_events.py` cria `lab_events` e `lab_anomaly_runs`. A fila operacional limitada registra metadados permitidos sem bloquear as operações; falhas de banco ou encerramento abrupto podem causar perda de eventos. O histórico de análises armazena apenas resultados agregados e parâmetros, em gravação independente e de melhor esforço. Os datasets, modelos treinados e resultados temporários das rotas existentes continuam em memória; o histórico agregado em PostgreSQL é uma funcionalidade posterior às descrições de armazenamento exclusivamente temporário das etapas acima.
+
+Em ambiente local autorizado, com `CRYPTO_LAB_ENABLED=true`, `CRYPTO_LAB_EVENT_STORE_ENABLED=true`, `DEBUG=false` e ADMIN autenticado, estão disponíveis:
+
+- `GET /api/v1/crypto-lab/events`: eventos paginados por cursor, filtros de período, origem, tipo e resultado; até 100 por página.
+- `GET /api/v1/crypto-lab/events/summary`: agregações SQL pelos mesmos filtros; período máximo de 31 dias e distribuição por dia UTC.
+- `GET /api/v1/crypto-lab/anomalies/history`: histórico agregado paginado, filtrável por período e estado; requer também `CRYPTO_LAB_ANOMALY_ENABLED=true`.
+- `POST /api/v1/crypto-lab/events/synthetic-ingestions`: corpo estrito `{"count":600}`; gera eventos sanitizados com origem `synthetic`, categorias fixas e identificador de execução. O volume é configurável de 1 a 10.000 por chamada; há uma ingestão por processo, lotes de até 250, prazo de três segundos por lote e orçamento total de 20 segundos. Não utiliza a fila operacional nem modifica o gerador de treinamento.
+
+A resposta da ingestão informa `requested`, `generated`, `persisted_confirmed`, `failed_or_unconfirmed`, `not_generated`, duração e estado. Lotes são confirmados separadamente: se a conexão falhar durante o commit, o lote é contado como não confirmado, pois pode ou não ter sido gravado. Para conferir o total e as categorias, consultar o resumo com `origin=synthetic` e o período apropriado; ele inclui também outras ingestões sintéticas desse período, se existirem. Não há endpoint de escrita arbitrária. Identificadores de execução distinguem os lotes na listagem.
+
+Exemplo de demonstração em uma API local já configurada com banco de laboratório e credencial ADMIN obtida pelo fluxo existente (não registrar o token):
+
+```bash
+curl -sS -X POST 'http://127.0.0.1:8000/api/v1/crypto-lab/events/synthetic-ingestions' \
+  -H "Authorization: Bearer $LAB_ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"count":600}'
+curl -sS 'http://127.0.0.1:8000/api/v1/crypto-lab/events/summary?origin=synthetic' \
+  -H "Authorization: Bearer $LAB_ADMIN_TOKEN"
+```
+
+### Validação observada
+
+Em PostgreSQL 16 descartável, com rede própria, dados em `tmpfs` e somente a migração do laboratório aplicada após conferir banco e usuário de teste, uma ingestão ADMIN solicitou, gerou e confirmou **600 eventos**, sem lote falho ou não confirmado. O resumo SQL retornou **600**, sendo **150** em cada uma das quatro categorias sintéticas. Uma cifragem AES-256-GCM real de texto fictício produziu um evento `AES_ENCRYPT` observado, confirmado após nova conexão; o marcador fictício não apareceu no campo de operação. Anônimo e USER foram rejeitados e o corpo com campo extra ou volume acima do limite foi recusado.
+
+Foram executados 12 testes direcionados: um teste integrado de ingestão e AES, um da fila e PostgreSQL, um de consultas, um de histórico de IA e oito de emissão; todos passaram. Os testes HTTP usaram transporte ASGI e autenticação por serviço de sessão simulado, não uma API de rede ou contas reais. Cada teste PostgreSQL recebeu banco vazio próprio; a cadeia histórica de migrações não foi executada.
+
+Para reproduzir na raiz do backend, com Docker e imagens locais `fink-backend-api` e `postgres:16`, o trecho abaixo cria apenas recursos temporários próprios e não monta código com permissão de escrita:
+
+```bash
+set -eu
+net="lab-volume-test-$$"
+db="lab-volume-pg-$$"
+cleanup() { docker rm -f "$db" >/dev/null 2>&1 || true; docker network rm "$net" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+docker network create --internal "$net" >/dev/null
+for module in tests.test_synthetic_ingestion_postgres tests.test_event_store_postgres tests.test_event_query_postgres tests.test_anomaly_history_postgres; do
+  docker run -d --name "$db" --network "$net" --network-alias lab-disposable --tmpfs /var/lib/postgresql/data \
+    -e POSTGRES_USER=labtest -e POSTGRES_PASSWORD=labtest -e POSTGRES_DB=lab_disposable postgres:16 >/dev/null
+  for i in $(seq 1 60); do
+    if docker exec "$db" pg_isready -U labtest -d lab_disposable >/dev/null 2>&1; then break; fi
+    if [ "$i" = 60 ]; then exit 1; fi
+    sleep 1
+  done
+  docker run --rm --network "$net" -v "$PWD:/workspace:ro" -w /workspace \
+    -e LAB_DISPOSABLE_DATABASE_URL=postgresql+asyncpg://labtest:labtest@lab-disposable:5432/lab_disposable \
+    --entrypoint python fink-backend-api -m unittest "$module" -v
+  docker rm -f "$db" >/dev/null
+done
+docker run --rm --network none -v "$PWD:/workspace:ro" -w /workspace \
+  --entrypoint python fink-backend-api -m unittest tests.test_event_emission -v
+```
+
+O volume é experimental e exclusivamente sintético; não comprova escalabilidade distribuída nem desempenho em produção. **Ainda não há retenção automática nem limite global de armazenamento**: sucessivas ingestões podem aumentar o banco. A fila e o histórico de melhor esforço também não garantem durabilidade em falhas abruptas. O contador `failed_or_unconfirmed` não determina o resultado de um commit interrompido.

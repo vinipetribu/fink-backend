@@ -50,9 +50,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             client_secret=settings.pluggy_client_secret,
         )
 
+    app.state.lab_event_writer = None
+    if (settings.crypto_lab_enabled and settings.crypto_lab_event_store_enabled
+            and not settings.debug and settings.environment.strip().lower() in {'development', 'test', 'testing', 'local'}):
+        from app.crypto_lab.event_store import events
+        from app.crypto_lab.event_store.writer import EventWriter
+        from app.crypto_lab.middleware import compatible_workers
+        from app.shared.database import engine
+
+        if compatible_workers(settings):
+            app.state.lab_event_writer = EventWriter(events, engine)
+            app.state.lab_event_writer.start()
+
     try:
         yield
     finally:
+        if app.state.lab_event_writer:
+            await app.state.lab_event_writer.close()
         from app.crypto_lab.attacks.runner import coordinator
         await coordinator.close()
         from app.crypto_lab.anomaly_lab.runner import coordinator as anomaly_coordinator
@@ -117,6 +131,10 @@ if settings.environment.strip().lower() != "production":
     app.include_router(attacks_router)
     from app.crypto_lab.anomaly_lab.routes import router as anomaly_router
     app.include_router(anomaly_router)
+    from app.crypto_lab.event_store.routes import router as events_router
+    app.include_router(events_router)
+    from app.crypto_lab.event_store.ingestion import router as ingestion_router
+    app.include_router(ingestion_router)
 app.add_middleware(CryptoLabMiddleware, settings=settings)
 
 

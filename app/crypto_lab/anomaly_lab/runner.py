@@ -1,6 +1,7 @@
 """Bounded jobs and synthetic-only ephemeral storage."""
 import asyncio
 from collections import deque
+from datetime import datetime, timezone
 import json
 import os
 import sys
@@ -19,6 +20,7 @@ class Coordinator:
         self.jobs, self.datasets, self.results = {}, {}, {}
         self.starts, self.user_starts, self.reads = deque(), {}, {}
         self.active, self.task, self.process, self.has_slot = None, None, None, False
+        self.history_tasks = set()
 
     def clean(self, now):
         for storage in (self.jobs, self.datasets, self.results):
@@ -51,7 +53,8 @@ class Coordinator:
             del self.jobs[min(self.jobs, key=lambda k: self.jobs[k]['ended'])]
         job_id = str(uuid4())
         self.jobs[job_id] = {'owner': owner, 'job_id': job_id, 'kind': kind, 'status': 'running',
-                             'schema_version': 1, 'scope': 'synthetic_only', 'started': now}
+                             'schema_version': 1, 'scope': 'synthetic_only', 'started': now,
+                             '_history_started_at': datetime.now(timezone.utc)}
         self.active = job_id
         self.starts.append(now)
         self.user_starts[owner] = now
@@ -66,12 +69,13 @@ class Coordinator:
         times.append(now)
         entry = storage.get(key)
         if not entry or entry['owner'] != owner: raise NotFound()
-        return {k: v for k, v in entry.items() if k not in ('owner', 'started', 'ended', 'data')} | (
+        return {k: v for k, v in entry.items() if k not in ('owner', 'started', 'ended', 'data', '_history_started_at')} | (
             {'duration_seconds': (entry.get('ended') or now) - entry['started']} if 'started' in entry else {})
 
     async def _execute(self, job_id, timeout, data):
         job = self.jobs[job_id]
         spawn = None
+        payload = None
         try:
             async with asyncio.timeout_at(asyncio.get_running_loop().time() + max(0, timeout - (time.monotonic() - job['started']))):
                 env = {'PATH': os.defpath, 'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1',
@@ -124,6 +128,22 @@ class Coordinator:
             job['ended'] = time.monotonic()
             self.active = None
             self.release()
+            self.record_history(job, payload if job['status'] == 'completed' else None)
+
+    def record_history(self, job, payload=None):
+        try:
+            if job['kind'] != 'run' or len(self.history_tasks) >= 4:
+                return
+            from app.crypto_lab.anomaly_lab.history import enabled, persist
+            if not enabled():
+                return
+            task = asyncio.create_task(persist(job['job_id'], job['status'], job['_history_started_at'],
+                                               datetime.now(timezone.utc), payload))
+            self.history_tasks.add(task)
+            task.add_done_callback(self.history_tasks.discard)
+        except Exception:
+            # History must never alter an analysis outcome.
+            return
 
     def release(self):
         if self.has_slot:
@@ -138,8 +158,11 @@ class Coordinator:
         if self.active:
             self.jobs[self.active]['status'] = 'failed'
             self.jobs[self.active]['ended'] = time.monotonic()
+            self.record_history(self.jobs[self.active])
             self.active = None
         self.release()
+        if self.history_tasks:
+            await asyncio.gather(*tuple(self.history_tasks), return_exceptions=True)
 
 
 coordinator = Coordinator()

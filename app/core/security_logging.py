@@ -61,6 +61,8 @@ def log_security_event(
         _security_events.append(payload)
 
     logger.info(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    from app.crypto_lab.event_store.emitter import emit
+    emit(event, '/api/v1/sessoes/login' if event in ('LOGIN_SUCCESS', 'LOGIN_FAILURE') else '<security-route>', result)
 
 
 def get_security_logs() -> list[dict[str, str]]:

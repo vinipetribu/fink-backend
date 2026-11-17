@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="Debug mode")
     environment: str = Field(default="production", description="Environment")
     crypto_lab_enabled: bool = Field(default=False, description="Enable local-only AES laboratory")
+    crypto_lab_event_store_enabled: bool = Field(default=False, description="Enable laboratory event persistence")
     crypto_lab_experimental_enabled: bool = Field(default=False, description="Enable insecure teaching cipher")
     crypto_lab_attacks_enabled: bool = Field(default=False, description="Enable local controlled experiments")
     crypto_lab_attacks_timeout_seconds: float = Field(default=120, gt=0, le=120)

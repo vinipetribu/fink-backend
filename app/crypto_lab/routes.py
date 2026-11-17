@@ -102,11 +102,18 @@ async def run_experiment(
     """Run the insecure educational cipher only when explicitly enabled for admins."""
     if not settings.crypto_lab_experimental_enabled:
         raise HTTPException(status_code=503, detail="Laboratório experimental indisponível")
+    from app.crypto_lab.event_store.emitter import emit
+    event_type = 'TOY_ENCRYPT' if isinstance(body, ToyEncryptRequest) else 'TOY_DECRYPT'
     try:
         if isinstance(body, ToyEncryptRequest):
-            return await run_in_threadpool(toy_service.encrypt, body.text, user.id_pessoa)
-        return await run_in_threadpool(toy_service.decrypt, body.ciphertext, body.key_id, user.id_pessoa)
+            result = await run_in_threadpool(toy_service.encrypt, body.text, user.id_pessoa)
+        else:
+            result = await run_in_threadpool(toy_service.decrypt, body.ciphertext, body.key_id, user.id_pessoa)
+        emit(event_type, '/api/v1/crypto-lab/experimental/run', 'SUCCESS')
+        return result
     except CapacityError:
+        emit(event_type, '/api/v1/crypto-lab/experimental/run', 'FAILURE')
         raise HTTPException(status_code=503, detail="Laboratório indisponível") from None
     except DecryptionError:
+        emit(event_type, '/api/v1/crypto-lab/experimental/run', 'FAILURE')
         raise HTTPException(status_code=400, detail="Não foi possível descriptografar o payload") from None
