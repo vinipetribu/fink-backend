@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0", description="Application version")
     debug: bool = Field(default=False, description="Debug mode")
     environment: str = Field(default="production", description="Environment")
+    disable_local_seed: bool = Field(default=False, description="Disable startup seed in local environments")
+    disable_local_create_all: bool = Field(default=False, description="Disable automatic table creation in local environments")
     crypto_lab_enabled: bool = Field(default=False, description="Enable local-only AES laboratory")
     crypto_lab_event_store_enabled: bool = Field(default=False, description="Enable laboratory event persistence")
     crypto_lab_experimental_enabled: bool = Field(default=False, description="Enable insecure teaching cipher")

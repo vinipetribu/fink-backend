@@ -36,9 +36,13 @@ from app.comercial.api.solicitacao_pagamento_routes import (
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # DB
-    await init_db(create_all=(settings.environment != "production"))
+    local_create_disabled = (settings.disable_local_create_all and
+                             settings.environment.strip().lower() in {"development", "test", "testing", "local"})
+    await init_db(create_all=(settings.environment != "production" and not local_create_disabled))
     # Seed (sugiro rodar só fora de produção)
-    if settings.environment != "production":
+    if settings.environment != "production" and not (
+        settings.disable_local_seed and settings.environment.strip().lower() in {"development", "test", "testing", "local"}
+    ):
         await seed_db()
 
     # Disabled by default: do not instantiate or authenticate an external client.
